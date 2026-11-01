@@ -156,6 +156,17 @@ proxy/default.conf (route by path):
 server {
     listen 80;
 
+    # Landing page at the root
+    location = / {
+        default_type text/html;
+        return 200 '<h1>My Sites</h1><a href="/site1/">Site 1</a> | <a href="/site2/">Site 2</a>';
+    }
+
+    # Redirect missing trailing slash
+    location = /site1 { return 301 /site1/; }
+    location = /site2 { return 301 /site2/; }
+
+    # Proxy to the site containers
     location /site1/ {
         proxy_pass http://site1/;
     }
@@ -164,6 +175,11 @@ server {
         proxy_pass http://site2/;
     }
 }
+
+
+cd ~/myapp
+docker compose exec proxy nginx -t          # test the config syntax
+docker compose exec proxy nginx -s reload   # apply it
 
 mkdir -p site1 site2 proxy
 echo "<h1>Site 1</h1>" > site1/index.html
