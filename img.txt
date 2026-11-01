@@ -1,0 +1,175 @@
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker $USER   # log out and back in afterwards
+docker compose version
+
+
+
+services:
+  web:
+    image: nginx:latest
+    container_name: web
+    ports:
+      - "80:80"
+    depends_on:
+      - db
+    networks:
+      - appnet
+
+  db:
+    image: postgres:16
+    container_name: db
+    environment:
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: changeme
+      POSTGRES_DB: appdb
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    networks:
+      - appnet
+
+volumes:
+  dbdata:
+
+networks:
+  appnet:
+
+
+
+
+
+docker compose up -d        # start in background
+docker compose ps           # check status
+docker compose logs -f      # view logs
+docker compose down         # stop and remove containers (keeps volumes)
+
+
+
+
+
+-------------------
+
+
+FROM nginx:latest
+COPY html/ /usr/share/nginx/html/
+
+myapp/
+├── docker-compose.yml
+├── Dockerfile
+├── .env
+└── html/
+    └── index.html
+
+
+FROM nginx:1.27
+COPY html/ /usr/share/nginx/html/
+
+
+
+
+services:
+  web:
+    build: .
+    image: mywebsite:1.0
+    container_name: web
+    ports:
+      - "80:80"
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - appnet
+
+  db:
+    image: postgres:16
+    container_name: db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: appdb
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U appuser -d appdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - appnet
+
+volumes:
+  dbdata:
+
+networks:
+  appnet:
+
+
+
+
+
+docker compose config
+docker compose up -d --build
+docker compose ps
+curl http://localhost
+
+
+
+services:
+  proxy:
+    image: nginx:1.27
+    container_name: proxy
+    ports:
+      - "80:80"
+    volumes:
+      - ./proxy/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - site1
+      - site2
+    networks:
+      - appnet
+
+  site1:
+    image: nginx:1.27
+    volumes:
+      - ./site1:/usr/share/nginx/html:ro
+    networks:
+      - appnet
+
+  site2:
+    image: nginx:1.27
+    volumes:
+      - ./site2:/usr/share/nginx/html:ro
+    networks:
+      - appnet
+
+networks:
+  appnet:
+
+
+
+
+proxy/default.conf (route by path):
+
+
+
+server {
+    listen 80;
+
+    location /site1/ {
+        proxy_pass http://site1/;
+    }
+
+    location /site2/ {
+        proxy_pass http://site2/;
+    }
+}
+
+mkdir -p site1 site2 proxy
+echo "<h1>Site 1</h1>" > site1/index.html
+echo "<h1>Site 2</h1>" > site2/index.html
+# create proxy/default.conf as above
+
+docker compose up -d
+curl http://localhost/site1/
+curl http://localhost/site2/
